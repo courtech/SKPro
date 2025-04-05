@@ -1,0 +1,1421 @@
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { ArrowLeft, Save, Upload } from "lucide-react";
+import SignatureCanvas from "react-signature-canvas";
+
+// Color palette based on the existing design system
+const colors = {
+  primary: "#0B51A6", // Main blue color
+  secondary: "#E1362C",
+  accent: "#FEC425",
+  success: "#65B08F",
+  light: "#F5F7FA",
+  grey: {
+    100: "#f7f7f7",
+    200: "#e9e9e9",
+    300: "#d9d9d9", 
+    400: "#c4c4c4",
+    500: "#9d9d9d",
+    600: "#6b6b6b",
+    700: "#4b4b4b",
+    800: "#2d2d2d",
+    900: "#1a1a1a"
+  }
+};
+
+export default function AddMemberPage() {
+  // Signature pad ref
+  const sigPad = useRef<SignatureCanvas>(null);
+  
+  // State for signature options
+  const [signatureMethod, setSignatureMethod] = useState<'draw' | 'upload'>('draw');
+  const [uploadedSignature, setUploadedSignature] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State to track viewport size
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // State for form fields
+  const [formData, setFormData] = useState({
+    // Regional Info
+    region: "",
+    province: "",
+    cityMunicipality: "",
+    barangay: "",
+    purokZone: "",
+    
+    // Personal Info
+    lastName: "",
+    firstName: "",
+    middleName: "",
+    suffix: "",
+    sex: "",
+    birthMonth: "",
+    birthDay: "",
+    birthYear: "",
+    age: "",
+    civilStatus: "",
+    
+    // Contact Info
+    email: "",
+    contactNumber: "",
+    
+    // Classification
+    youthClassification: "", // In School Youth, Out of School Youth, etc.
+    youthAgeGroup: "", // Child Youth, Core Youth, Young Adult
+    educationalAttainment: "",
+    workStatus: "",
+    
+    // Additional Fields
+    registeredSKVoter: false,
+    registeredNationalVoter: false,
+    votedLastElection: false,
+    attendedKKAssembly: false,
+    assemblyFrequency: "",
+    notAttendedReason: "",
+    
+    // Additional classifications
+    isPWD: false,
+    isChildrenInConflict: false,
+    isIndigenousPeople: false,
+  });
+  
+  // Check if viewport is mobile
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Check initially
+    checkIfMobile();
+    
+    // Add event listener for resize
+    window.addEventListener('resize', checkIfMobile);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
+  
+  // Format today's date for display
+  const formatCurrentDate = () => {
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+  
+  // Handle form input changes
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    // Handle checkbox inputs
+    if (type === 'checkbox') {
+      const checkbox = e.target as HTMLInputElement;
+      setFormData({
+        ...formData,
+        [name]: checkbox.checked
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+      
+      // Update age when birthYear changes
+      if (name === 'birthYear' && value) {
+        calculateAge(value);
+      }
+      
+      // Show/hide assembly frequency field
+      if (name === 'attendedKKAssembly') {
+        const checkbox = e.target as HTMLInputElement;
+        if (!checkbox.checked) {
+          setFormData(prev => ({
+            ...prev,
+            assemblyFrequency: ""
+          }));
+        }
+      }
+    }
+  };
+  
+  // Calculate age from birth year
+  const calculateAge = (birthYear: string) => {
+    if (!birthYear) return;
+    
+    const today = new Date();
+    const age = today.getFullYear() - parseInt(birthYear);
+    
+    setFormData({
+      ...formData,
+      age: age.toString()
+    });
+  };
+  
+  // Clear signature pad
+  const clearSignature = () => {
+    if (sigPad.current) {
+      sigPad.current.clear();
+    }
+    setUploadedSignature(null);
+  };
+  
+  // Get signature data as base64 string
+  const getSignatureData = () => {
+    if (signatureMethod === 'draw' && sigPad.current) {
+      return sigPad.current.getTrimmedCanvas().toDataURL('image/png');
+    } else if (signatureMethod === 'upload' && uploadedSignature) {
+      return uploadedSignature;
+    }
+    return null;
+  };
+  
+  // Handle signature upload
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setUploadedSignature(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  
+  // Trigger file input click
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    // Get signature data
+    const signatureData = getSignatureData();
+    
+    // Construct the full member data
+    const memberData = {
+      ...formData,
+      name: `${formData.lastName}, ${formData.firstName}${formData.middleName ? ' ' + formData.middleName : ''}${formData.suffix ? ' ' + formData.suffix : ''}`,
+      birthday: {
+        month: parseInt(formData.birthMonth) || 0,
+        day: parseInt(formData.birthDay) || 0,
+        year: parseInt(formData.birthYear) || 0
+      },
+      signature: signatureData
+    };
+    console.log('Form submitted:', memberData);
+    // Add logic to save the member data
+    // Redirect to members list or show success message
+  };
+  
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      {/* Desktop/Tablet Layout - Paper-like design with side navigation */}
+      {!isMobile && (
+        <div className="flex min-h-screen">
+          {/* Left sidebar for desktop */}
+          <div className="hidden md:block w-72 bg-white border-r border-gray-200 min-h-screen sticky top-0 overflow-auto p-6 shadow-sm">
+            <Link href="/members" className="flex items-center text-gray-600 mb-10 hover:text-gray-900 transition-colors">
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              <span>Back to Members</span>
+            </Link>
+            
+            <h2 className="text-lg font-semibold text-gray-800 mb-8">KK Survey Form</h2>
+            
+            <nav className="space-y-2">
+              <a href="#profile" className="block py-2.5 px-4 rounded-md text-white bg-[#0B51A6] font-medium transition-colors">
+                I. Profile
+              </a>
+              <a href="#demographics" className="block py-2.5 px-4 rounded-md text-gray-700 hover:bg-gray-100 transition-colors">
+                II. Demographic Characteristics
+              </a>
+              <a href="#signature" className="block py-2.5 px-4 rounded-md text-gray-700 hover:bg-gray-100 transition-colors">
+                Signature
+              </a>
+            </nav>
+            
+            <div className="mt-auto pt-10">
+              <button
+                type="submit"
+                form="kkSurveyForm"
+                className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#0B51A6] hover:bg-[#0A4A95] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0B51A6] transition-colors"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save Questionnaire
+              </button>
+            </div>
+          </div>
+          
+          {/* Main content area with paper-like styling */}
+          <div className="flex-1 overflow-auto">
+            <div className="max-w-4xl mx-auto py-10 px-8">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-8">
+                  <div className="flex justify-between items-start mb-8 border-b border-gray-100 pb-6">
+                    <h1 className="text-2xl font-bold text-gray-900">KK Survey Questionnaire</h1>
+                    <div className="flex space-x-6">
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 mb-1">Respondent #</p>
+                        <p className="text-gray-700 font-medium">To be assigned</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 mb-1">Date</p>
+                        <p className="text-gray-700 font-medium">{formatCurrentDate()}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 border-l-4 border-[#0B51A6] p-5 mb-10 rounded-r-md">
+                    <p className="text-sm text-gray-700 mb-3">
+                      We are currently conducting a study that focuses on assessing the demographic information of the Katipunan ng Kabataan. 
+                      We would like to ask your participation by taking your time to answer this questionnaire.
+                    </p>
+                    <p className="text-sm text-gray-800 font-medium">
+                      REST ASSURED THAT ALL INFORMATION GATHERED FROM THIS STUDY WILL BE TREATED WITH UTMOST CONFIDENTIALITY.
+                    </p>
+                  </div>
+                  
+                  <form id="kkSurveyForm" onSubmit={handleSubmit} className="space-y-10">
+                    {/* I. PROFILE */}
+                    <div id="profile" className="space-y-8">
+                      <h2 className="text-xl font-bold text-gray-900 border-b border-gray-200 pb-3">I. PROFILE</h2>
+                      
+                      {/* Name */}
+                      <div className="space-y-4">
+                        <label className="block text-gray-700 font-medium mb-1">Name of Respondent:</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+                          <div className="col-span-1">
+                            <input
+                              type="text"
+                              id="lastName"
+                              name="lastName"
+                              value={formData.lastName}
+                              onChange={handleChange}
+                              required
+                              placeholder="Last Name"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Last Name</label>
+                          </div>
+                          <div className="col-span-1">
+                            <input
+                              type="text"
+                              id="firstName"
+                              name="firstName"
+                              value={formData.firstName}
+                              onChange={handleChange}
+                              required
+                              placeholder="First Name"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">First Name</label>
+                          </div>
+                          <div className="col-span-1">
+                            <input
+                              type="text"
+                              id="middleName"
+                              name="middleName"
+                              value={formData.middleName}
+                              onChange={handleChange}
+                              placeholder="Middle Name"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Middle Name</label>
+                          </div>
+                          <div className="col-span-1">
+                            <input
+                              type="text"
+                              id="suffix"
+                              name="suffix"
+                              value={formData.suffix}
+                              onChange={handleChange}
+                              placeholder="Suffix"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Suffix</label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Location */}
+                      <div className="space-y-4">
+                        <label className="block text-gray-700 font-medium mb-1">Location:</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                          <div>
+                            <input
+                              type="text"
+                              id="region"
+                              name="region"
+                              value={formData.region}
+                              onChange={handleChange}
+                              required
+                              placeholder="Region"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Region</label>
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              id="province"
+                              name="province"
+                              value={formData.province}
+                              onChange={handleChange}
+                              required
+                              placeholder="Province"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Province</label>
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              id="cityMunicipality"
+                              name="cityMunicipality"
+                              value={formData.cityMunicipality}
+                              onChange={handleChange}
+                              required
+                              placeholder="City/Municipality"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">City/Municipality</label>
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              id="barangay"
+                              name="barangay"
+                              value={formData.barangay}
+                              onChange={handleChange}
+                              required
+                              placeholder="Barangay"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Barangay</label>
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              id="purokZone"
+                              name="purokZone"
+                              value={formData.purokZone}
+                              onChange={handleChange}
+                              required
+                              placeholder="Purok/Zone"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent transition-all"
+                            />
+                            <label className="block text-xs text-gray-500 mt-2">Purok/Zone</label>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Personal Info */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Sex */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <label className="block text-gray-700 font-medium mb-3">Sex Assigned by Birth:</label>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="sexMale"
+                                name="sex"
+                                value="Male"
+                                checked={formData.sex === "Male"}
+                                onChange={handleChange}
+                                className="h-5 w-5 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="sexMale" className="ml-3 block text-sm text-gray-700">Male</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="sexFemale"
+                                name="sex"
+                                value="Female"
+                                checked={formData.sex === "Female"}
+                                onChange={handleChange}
+                                className="h-5 w-5 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="sexFemale" className="ml-3 block text-sm text-gray-700">Female</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Age & Birthday */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <label htmlFor="age" className="block text-gray-700 font-medium mb-2">Age:</label>
+                            <input
+                              type="text"
+                              id="age"
+                              name="age"
+                              value={formData.age}
+                              onChange={handleChange}
+                              readOnly
+                              className="w-full px-4 py-3 border border-gray-300 rounded-md bg-gray-50"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label htmlFor="birthday" className="block text-gray-700 font-medium mb-2">Birthday:</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                id="birthDay"
+                                name="birthDay"
+                                placeholder="DD"
+                                maxLength={2}
+                                value={formData.birthDay}
+                                onChange={handleChange}
+                                required
+                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent"
+                              />
+                              <span className="text-gray-500 self-center">/</span>
+                              <input
+                                type="text"
+                                id="birthMonth"
+                                name="birthMonth"
+                                placeholder="MM"
+                                maxLength={2}
+                                value={formData.birthMonth}
+                                onChange={handleChange}
+                                required
+                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent"
+                              />
+                              <span className="text-gray-500 self-center">/</span>
+                              <input
+                                type="text"
+                                id="birthYear"
+                                name="birthYear"
+                                placeholder="YYYY"
+                                maxLength={4}
+                                value={formData.birthYear}
+                                onChange={handleChange}
+                                required
+                                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent"
+                              />
+                            </div>
+                            <p className="mt-2 text-xs text-gray-500 text-right">(DD/MM/YYYY)</p>
+                          </div>
+                        </div>
+                        
+                        {/* Email & Contact */}
+                        <div>
+                          <label htmlFor="email" className="block text-gray-700 font-medium mb-2">E-mail address:</label>
+                          <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent"
+                            placeholder="yourname@example.com"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="contactNumber" className="block text-gray-700 font-medium mb-2">Contact #:</label>
+                          <input
+                            type="text"
+                            id="contactNumber"
+                            name="contactNumber"
+                            value={formData.contactNumber}
+                            onChange={handleChange}
+                            required
+                            className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0B51A6] focus:border-transparent"
+                            placeholder="e.g. 09XX XXX XXXX"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* II. DEMOGRAPHIC CHARACTERISTICS */}
+                    <div id="demographics" className="bg-white border border-gray-200 rounded-md p-6 mb-8">
+                      <h2 className="text-xl font-bold text-gray-900 mb-6">II. DEMOGRAPHIC CHARACTERISTICS</h2>
+                      <p className="text-sm text-gray-700 mb-8">Please select the appropriate response for each category below.</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Civil Status */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Civil Status</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusSingle"
+                                name="civilStatus"
+                                value="Single"
+                                checked={formData.civilStatus === "Single"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusSingle" className="ml-2 block text-sm text-gray-700">Single</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusMarried"
+                                name="civilStatus"
+                                value="Married"
+                                checked={formData.civilStatus === "Married"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusMarried" className="ml-2 block text-sm text-gray-700">Married</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusWidowed"
+                                name="civilStatus"
+                                value="Widowed"
+                                checked={formData.civilStatus === "Widowed"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusWidowed" className="ml-2 block text-sm text-gray-700">Widowed</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusDivorced"
+                                name="civilStatus"
+                                value="Divorced"
+                                checked={formData.civilStatus === "Divorced"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusDivorced" className="ml-2 block text-sm text-gray-700">Divorced</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusSeparated"
+                                name="civilStatus"
+                                value="Separated"
+                                checked={formData.civilStatus === "Separated"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusSeparated" className="ml-2 block text-sm text-gray-700">Separated</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusAnnulled"
+                                name="civilStatus"
+                                value="Annulled"
+                                checked={formData.civilStatus === "Annulled"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusAnnulled" className="ml-2 block text-sm text-gray-700">Annulled</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusUnknown"
+                                name="civilStatus"
+                                value="Unknown"
+                                checked={formData.civilStatus === "Unknown"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusUnknown" className="ml-2 block text-sm text-gray-700">Unknown</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="civilStatusLiveIn"
+                                name="civilStatus"
+                                value="Live-in"
+                                checked={formData.civilStatus === "Live-in"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="civilStatusLiveIn" className="ml-2 block text-sm text-gray-700">Live-in</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Youth Classification */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Youth Classification</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthClassificationISY"
+                                name="youthClassification"
+                                value="In School Youth"
+                                checked={formData.youthClassification === "In School Youth"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthClassificationISY" className="ml-2 block text-sm text-gray-700">In School Youth</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthClassificationOSY"
+                                name="youthClassification"
+                                value="Out of School Youth"
+                                checked={formData.youthClassification === "Out of School Youth"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthClassificationOSY" className="ml-2 block text-sm text-gray-700">Out of School Youth</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthClassificationWorking"
+                                name="youthClassification"
+                                value="Working Youth"
+                                checked={formData.youthClassification === "Working Youth"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthClassificationWorking" className="ml-2 block text-sm text-gray-700">Working Youth</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthClassificationSpecific"
+                                name="youthClassification"
+                                value="Youth w/ Specific needs"
+                                checked={formData.youthClassification === "Youth w/ Specific needs"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthClassificationSpecific" className="ml-2 block text-sm text-gray-700">Youth w/ Specific needs</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Special Group */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Special Group</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                id="isPWD"
+                                name="isPWD"
+                                checked={formData.isPWD}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300 rounded"
+                              />
+                              <label htmlFor="isPWD" className="ml-2 block text-sm text-gray-700">Person w/ Disability</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                id="isChildrenInConflict"
+                                name="isChildrenInConflict"
+                                checked={formData.isChildrenInConflict}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300 rounded"
+                              />
+                              <label htmlFor="isChildrenInConflict" className="ml-2 block text-sm text-gray-700">Children In Conflict w/ Law</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                id="isIndigenousPeople"
+                                name="isIndigenousPeople"
+                                checked={formData.isIndigenousPeople}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300 rounded"
+                              />
+                              <label htmlFor="isIndigenousPeople" className="ml-2 block text-sm text-gray-700">Indigenous People</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Youth Age Group */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Youth Age Group</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthAgeGroupChild"
+                                name="youthAgeGroup"
+                                value="Child Youth (15-17 yrs old)"
+                                checked={formData.youthAgeGroup === "Child Youth (15-17 yrs old)"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthAgeGroupChild" className="ml-2 block text-sm text-gray-700">Child Youth (15-17 yrs old)</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthAgeGroupCore"
+                                name="youthAgeGroup"
+                                value="Core Youth (18-24 yrs old)"
+                                checked={formData.youthAgeGroup === "Core Youth (18-24 yrs old)"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthAgeGroupCore" className="ml-2 block text-sm text-gray-700">Core Youth (18-24 yrs old)</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="youthAgeGroupYoungAdult"
+                                name="youthAgeGroup"
+                                value="Young Adult (15-30 yrs old)"
+                                checked={formData.youthAgeGroup === "Young Adult (15-30 yrs old)"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="youthAgeGroupYoungAdult" className="ml-2 block text-sm text-gray-700">Young Adult (15-30 yrs old)</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Work Status */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Work Status</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="workStatusEmployed"
+                                name="workStatus"
+                                value="Employed"
+                                checked={formData.workStatus === "Employed"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="workStatusEmployed" className="ml-2 block text-sm text-gray-700">Employed</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="workStatusUnemployed"
+                                name="workStatus"
+                                value="Unemployed"
+                                checked={formData.workStatus === "Unemployed"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="workStatusUnemployed" className="ml-2 block text-sm text-gray-700">Unemployed</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="workStatusSelfEmployed"
+                                name="workStatus"
+                                value="Self-Employed"
+                                checked={formData.workStatus === "Self-Employed"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="workStatusSelfEmployed" className="ml-2 block text-sm text-gray-700">Self-Employed</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="workStatusLookingForJob"
+                                name="workStatus"
+                                value="Currently looking for a Job"
+                                checked={formData.workStatus === "Currently looking for a Job"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="workStatusLookingForJob" className="ml-2 block text-sm text-gray-700">Currently looking for a Job</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="workStatusNotInterested"
+                                name="workStatus"
+                                value="Not Interested Looking for a Job"
+                                checked={formData.workStatus === "Not Interested Looking for a Job"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="workStatusNotInterested" className="ml-2 block text-sm text-gray-700">Not Interested Looking for a Job</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Educational Background */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Educational Background</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentElementaryLevel"
+                                name="educationalAttainment"
+                                value="Elementary Level"
+                                checked={formData.educationalAttainment === "Elementary Level"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentElementaryLevel" className="ml-2 block text-sm text-gray-700">Elementary Level</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentElementaryGrad"
+                                name="educationalAttainment"
+                                value="Elementary Grad"
+                                checked={formData.educationalAttainment === "Elementary Grad"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentElementaryGrad" className="ml-2 block text-sm text-gray-700">Elementary Grad</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentHighSchoolLevel"
+                                name="educationalAttainment"
+                                value="High School Level"
+                                checked={formData.educationalAttainment === "High School Level"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentHighSchoolLevel" className="ml-2 block text-sm text-gray-700">High School Level</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentHighSchoolGrad"
+                                name="educationalAttainment"
+                                value="High School Grad"
+                                checked={formData.educationalAttainment === "High School Grad"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentHighSchoolGrad" className="ml-2 block text-sm text-gray-700">High School Grad</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentVocationalGrad"
+                                name="educationalAttainment"
+                                value="Vocational Grad"
+                                checked={formData.educationalAttainment === "Vocational Grad"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentVocationalGrad" className="ml-2 block text-sm text-gray-700">Vocational Grad</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentCollegeLevel"
+                                name="educationalAttainment"
+                                value="College Level"
+                                checked={formData.educationalAttainment === "College Level"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentCollegeLevel" className="ml-2 block text-sm text-gray-700">College Level</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentCollegeGrad"
+                                name="educationalAttainment"
+                                value="College Grad"
+                                checked={formData.educationalAttainment === "College Grad"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentCollegeGrad" className="ml-2 block text-sm text-gray-700">College Grad</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentMastersLevel"
+                                name="educationalAttainment"
+                                value="Masters Level"
+                                checked={formData.educationalAttainment === "Masters Level"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentMastersLevel" className="ml-2 block text-sm text-gray-700">Masters Level</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentMastersGrad"
+                                name="educationalAttainment"
+                                value="Masters Grad"
+                                checked={formData.educationalAttainment === "Masters Grad"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentMastersGrad" className="ml-2 block text-sm text-gray-700">Masters Grad</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentDoctorateLevel"
+                                name="educationalAttainment"
+                                value="Doctorate Level"
+                                checked={formData.educationalAttainment === "Doctorate Level"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentDoctorateLevel" className="ml-2 block text-sm text-gray-700">Doctorate Level</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="educationalAttainmentDoctorateGraduate"
+                                name="educationalAttainment"
+                                value="Doctorate Graduate"
+                                checked={formData.educationalAttainment === "Doctorate Graduate"}
+                                onChange={handleChange}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="educationalAttainmentDoctorateGraduate" className="ml-2 block text-sm text-gray-700">Doctorate Graduate</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Registered SK Voter */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Registered SK Voter?</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="registeredSKVoterYes"
+                                name="registeredSKVoter"
+                                value="true"
+                                checked={formData.registeredSKVoter === true}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    registeredSKVoter: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="registeredSKVoterYes" className="ml-2 block text-sm text-gray-700">Yes</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="registeredSKVoterNo"
+                                name="registeredSKVoter"
+                                value="false"
+                                checked={formData.registeredSKVoter === false}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    registeredSKVoter: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="registeredSKVoterNo" className="ml-2 block text-sm text-gray-700">No</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Did you vote last SK election */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Did you vote last SK election?</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="votedLastElectionYes"
+                                name="votedLastElection"
+                                value="true"
+                                checked={formData.votedLastElection === true}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    votedLastElection: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="votedLastElectionYes" className="ml-2 block text-sm text-gray-700">Yes</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="votedLastElectionNo"
+                                name="votedLastElection"
+                                value="false"
+                                checked={formData.votedLastElection === false}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    votedLastElection: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="votedLastElectionNo" className="ml-2 block text-sm text-gray-700">No</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Registered National Voter */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Registered National Voter?</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="registeredNationalVoterYes"
+                                name="registeredNationalVoter"
+                                value="true"
+                                checked={formData.registeredNationalVoter === true}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    registeredNationalVoter: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="registeredNationalVoterYes" className="ml-2 block text-sm text-gray-700">Yes</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="registeredNationalVoterNo"
+                                name="registeredNationalVoter"
+                                value="false"
+                                checked={formData.registeredNationalVoter === false}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    registeredNationalVoter: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="registeredNationalVoterNo" className="ml-2 block text-sm text-gray-700">No</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* KK Assembly attendance */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h3 className="font-bold text-gray-900 mb-4">Have you already attended a KK Assembly?</h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="attendedKKAssemblyYes"
+                                name="attendedKKAssembly"
+                                value="true"
+                                checked={formData.attendedKKAssembly === true}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    attendedKKAssembly: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="attendedKKAssemblyYes" className="ml-2 block text-sm text-gray-700">Yes</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="radio"
+                                id="attendedKKAssemblyNo"
+                                name="attendedKKAssembly"
+                                value="false"
+                                checked={formData.attendedKKAssembly === false}
+                                onChange={(e) => {
+                                  setFormData({
+                                    ...formData,
+                                    attendedKKAssembly: e.target.value === "true"
+                                  });
+                                }}
+                                className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                              />
+                              <label htmlFor="attendedKKAssemblyNo" className="ml-2 block text-sm text-gray-700">No</label>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Assembly Frequency */}
+                        {formData.attendedKKAssembly && (
+                          <div className="bg-gray-50 rounded-lg p-6">
+                            <h3 className="font-bold text-gray-900 mb-4">If Yes, How many times?</h3>
+                            <div className="space-y-3">
+                              <div className="flex items-center">
+                                <input
+                                  type="radio"
+                                  id="assemblyFrequency1-2"
+                                  name="assemblyFrequency"
+                                  value="1-2 Times"
+                                  checked={formData.assemblyFrequency === "1-2 Times"}
+                                  onChange={handleChange}
+                                  className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                                />
+                                <label htmlFor="assemblyFrequency1-2" className="ml-2 block text-sm text-gray-700">1-2 Times</label>
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="radio"
+                                  id="assemblyFrequency3-4"
+                                  name="assemblyFrequency"
+                                  value="3-4 Times"
+                                  checked={formData.assemblyFrequency === "3-4 Times"}
+                                  onChange={handleChange}
+                                  className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                                />
+                                <label htmlFor="assemblyFrequency3-4" className="ml-2 block text-sm text-gray-700">3-4 Times</label>
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="radio"
+                                  id="assemblyFrequency5Plus"
+                                  name="assemblyFrequency"
+                                  value="5 and above"
+                                  checked={formData.assemblyFrequency === "5 and above"}
+                                  onChange={handleChange}
+                                  className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                                />
+                                <label htmlFor="assemblyFrequency5Plus" className="ml-2 block text-sm text-gray-700">5 and above</label>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Why not attended */}
+                        {formData.attendedKKAssembly === false && (
+                          <div className="bg-gray-50 rounded-lg p-6">
+                            <h3 className="font-bold text-gray-900 mb-4">If No, Why?</h3>
+                            <div className="space-y-3">
+                              <div className="flex items-center">
+                                <input
+                                  type="radio"
+                                  id="notAttendedReasonNoMeeting"
+                                  name="notAttendedReason"
+                                  value="There was no KK Assembly Meeting"
+                                  checked={formData.notAttendedReason === "There was no KK Assembly Meeting"}
+                                  onChange={handleChange}
+                                  className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                                />
+                                <label htmlFor="notAttendedReasonNoMeeting" className="ml-2 block text-sm text-gray-700">There was no KK Assembly Meeting</label>
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="radio"
+                                  id="notAttendedReasonNotInterested"
+                                  name="notAttendedReason"
+                                  value="Not Interested to Attend"
+                                  checked={formData.notAttendedReason === "Not Interested to Attend"}
+                                  onChange={handleChange}
+                                  className="h-4 w-4 text-[#0B51A6] focus:ring-[#0B51A6] border-gray-300"
+                                />
+                                <label htmlFor="notAttendedReasonNotInterested" className="ml-2 block text-sm text-gray-700">Not Interested to Attend</label>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Signature Section */}
+                    <div id="signature" className="bg-white border border-gray-200 rounded-md p-6 mb-8">
+                      <h2 className="text-xl font-bold text-gray-900 mb-6">Participant Signature</h2>
+                      <p className="text-sm text-gray-700 mb-8">Please provide your signature to confirm participation in this survey.</p>
+                      
+                      {/* Signature Component */}
+                      <div className="w-full max-w-xl mx-auto border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                        {/* Signature Header */}
+                        <div className="border-b border-gray-200 p-4 bg-gray-50">
+                          <h4 className="text-lg font-medium text-gray-700">Signature</h4>
+                        </div>
+                        
+                        {/* Signature Method Tabs */}
+                        <div className="flex border-b border-gray-200">
+                          <button
+                            type="button"
+                            className={`flex-1 py-3 px-4 text-sm font-medium ${signatureMethod === 'draw' ? 'text-[#0B51A6] border-b-2 border-[#0B51A6]' : 'text-gray-500'}`}
+                            onClick={() => setSignatureMethod('draw')}
+                          >
+                            Draw
+                          </button>
+                          <button
+                            type="button"
+                            className={`flex-1 py-3 px-4 text-sm font-medium ${signatureMethod === 'upload' ? 'text-[#0B51A6] border-b-2 border-[#0B51A6]' : 'text-gray-500'}`}
+                            onClick={() => setSignatureMethod('upload')}
+                          >
+                            Upload
+                          </button>
+                        </div>
+                        
+                        {/* Signature Drawing Pad */}
+                        {signatureMethod === 'draw' && (
+                          <div className="p-6">
+                            <div className="border border-gray-300 rounded-md mb-4 bg-gray-50">
+                              <SignatureCanvas
+                                ref={sigPad}
+                                penColor="black"
+                                canvasProps={{
+                                  width: 500,
+                                  height: 200,
+                                  className: "sigCanvas w-full"
+                                }}
+                              />
+                            </div>
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={clearSignature}
+                                className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2 px-3 rounded hover:bg-gray-100"
+                              >
+                                Clear signature
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Signature Upload */}
+                        {signatureMethod === 'upload' && (
+                          <div className="p-6">
+                            {uploadedSignature ? (
+                              <div className="mb-4">
+                                <div className="border border-gray-300 rounded-md p-4 bg-white">
+                                  <img 
+                                    src={uploadedSignature} 
+                                    alt="Uploaded signature" 
+                                    className="max-h-40 mx-auto" 
+                                  />
+                                </div>
+                                <div className="mt-4 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={clearSignature}
+                                    className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2 px-3 rounded hover:bg-gray-100"
+                                  >
+                                    Remove signature
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div 
+                                  onClick={triggerFileInput}
+                                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-gray-400"
+                                >
+                                  <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
+                                  <p className="text-sm text-gray-500 mb-1">Click to upload your signature</p>
+                                  <p className="text-xs text-gray-400">PNG or JPEG files only</p>
+                                </div>
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="image/png,image/jpeg"
+                                  onChange={handleSignatureUpload}
+                                  className="hidden"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Legal Disclaimer */}
+                        <div className="p-4 bg-gray-50 border-t border-gray-200">
+                          <p className="text-xs text-gray-500">
+                            By signing this document with an electronic signature, I agree that such signature
+                            will be as valid as handwritten signatures to the extent allowed by local law
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="text-center mt-8">
+                        <h3 className="text-lg font-bold text-gray-800">Thank you for your participation!</h3>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Mobile Layout - Streamlined version without sidebar */}
+      {isMobile && (
+        <div className="px-4 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center">
+              <Link href="/members" className="text-gray-500 hover:text-gray-700 mr-3">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+              <h1 className="text-xl font-bold text-gray-900">KK Survey</h1>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-md shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-xs text-gray-500">Date:</p>
+                <p className="text-sm font-medium">{formatCurrentDate()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Respondent #:</p>
+                <p className="text-sm text-gray-500">To be assigned</p>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-md text-xs border-l-2 border-[#0B51A6]">
+              <p className="mb-2">
+                We are currently conducting a study that focuses on assessing the demographic information of the Katipunan ng Kabataan.
+              </p>
+              <p className="font-medium">
+                ALL INFORMATION WILL BE TREATED WITH UTMOST CONFIDENTIALITY.
+              </p>
+            </div>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Mobile version form sections */}
+            {/* These are similar to the desktop version but condensed */}
+            {/* ... */}
+            
+            {/* Mobile sticky action buttons */}
+            <div className="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 mt-6">
+              <div className="flex space-x-3">
+                <Link
+                  href="/members"
+                  className="px-4 py-3 border border-gray-300 rounded-md flex-1 text-center text-sm font-medium text-gray-700 bg-white"
+                >
+                  Cancel
+                </Link>
+                <button
+                  type="submit"
+                  className="flex-1 flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#0B51A6]"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
