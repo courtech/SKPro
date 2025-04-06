@@ -5,7 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
-import SKProLogo from "@/assets/SKPro-Long.svg";
+// Import Image directly from public directory
+// import SKProLogo from "@/assets/SKPro-Long.svg";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -33,7 +34,7 @@ export default function Navbar() {
           
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <Image src={SKProLogo} alt="SKPro Logo" width={100} height={100} />
+            <Image src="/SKPro-Long.svg" alt="SKPro Logo" width={120} height={40} />
           </Link>
           
           {/* Navigation Links */}

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Printer, Download, FileText, RefreshCw, History, Upload, Plus, ArrowDown, Calendar, CheckCircle, X } from "lucide-react";
+import { Download, FileText, History, Upload, Plus, ArrowDown, Calendar, CheckCircle, X } from "lucide-react";
 import Link from "next/link";
+import { useMemberStore } from "@/lib/store/memberStore";
+import { Member } from "@/types/member";
 
 export default function ReportsPage() {
-  const [members, setMembers] = useState([
-    createEmptyMember(), // Start with one empty row
-  ]);
+  const { members, fetchMembers, isLoading } = useMemberStore();
+  const [reportMembers, setReportMembers] = useState<any[]>([]);
   const [showReportHistory, setShowReportHistory] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportData, setExportData] = useState({
@@ -22,6 +23,47 @@ export default function ReportsPage() {
     { id: 3, title: "Q3 2023 Youth Profile Report", date: "September 30, 2023", format: "DOCX" },
   ];
 
+  // Load members from store on mount
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
+
+  // Transform members to report format whenever the members change
+  useEffect(() => {
+    if (members.length > 0) {
+      const transformedMembers = members.map(member => {
+        return {
+          region: member.region,
+          province: member.province,
+          cityMunicipality: member.cityMunicipality,
+          barangay: member.barangay,
+          name: member.name,
+          age: member.age,
+          birthdayMonth: member.birthday.month,
+          birthdayDay: member.birthday.day,
+          birthdayYear: member.birthday.year,
+          sex: member.sex,
+          civilStatus: member.civilStatus,
+          youthClassification: member.youthClassification,
+          youthAgeGroup: member.youthAgeGroup,
+          emailAddress: member.email,
+          contactNumber: member.contactNumber,
+          homeAddress: member.homeAddress,
+          educationalAttainment: member.educationalAttainment,
+          workStatus: member.workStatus,
+          registeredVoter: member.isRegisteredVoter ? "Y" : "N",
+          votedLastElection: member.votedLastElection ? "Y" : "N",
+          attendedKKAssembly: member.attendedKKAssembly ? "Y" : "N",
+          assemblyFrequency: member.assemblyFrequency?.toString() || "0"
+        };
+      });
+      setReportMembers(transformedMembers);
+    } else {
+      // If no members yet, use empty state
+      setReportMembers([createEmptyMember()]);
+    }
+  }, [members]);
+
   // Function to create an empty member record
   function createEmptyMember() {
     return {
@@ -31,19 +73,22 @@ export default function ReportsPage() {
       barangay: "",
       name: "",
       age: "",
-      birthday: "",
+      birthdayMonth: "",
+      birthdayDay: "",
+      birthdayYear: "",
       sex: "",
       civilStatus: "",
-      youthClassification: "",
-      educationalAttainment: "",
+      youthClassification: "", // ISY, OSY, NEET, etc.
+      youthAgeGroup: "", // CHILD YOUTH, CORE YOUTH, YOUNG ADULT
       emailAddress: "",
       contactNumber: "",
       homeAddress: "",
+      educationalAttainment: "",
       workStatus: "",
       registeredVoter: "",
-      attendsGatherings: "",
-      skills: "",
-      ifEmployed: ""
+      votedLastElection: "",
+      attendedKKAssembly: "",
+      assemblyFrequency: ""
     };
   }
 
@@ -54,18 +99,64 @@ export default function ReportsPage() {
     const defaultCity = "CAGAYAN DE ORO CITY";
     const defaultBarangay = "BARANGAY KAUSWAGAN";
     
-    setMembers(members => members.map(member => ({
-      ...member,
-      region: member.region || defaultRegion,
-      province: member.province || defaultProvince,
-      cityMunicipality: member.cityMunicipality || defaultCity,
-      barangay: member.barangay || defaultBarangay
-    })));
-  }, []);
+    if (reportMembers.length === 1 && !reportMembers[0].name) {
+      setReportMembers(members => members.map(member => ({
+        ...member,
+        region: member.region || defaultRegion,
+        province: member.province || defaultProvince,
+        cityMunicipality: member.cityMunicipality || defaultCity,
+        barangay: member.barangay || defaultBarangay
+      })));
+    }
+  }, [reportMembers]);
+
+  // Function to import members from the member store (updates the report with latest data)
+  const importFromDatabase = () => {
+    if (members.length > 0) {
+      const transformedMembers = members.map(member => {
+        return {
+          region: member.region,
+          province: member.province,
+          cityMunicipality: member.cityMunicipality,
+          barangay: member.barangay,
+          name: member.name,
+          age: member.age.toString(),
+          birthdayMonth: member.birthday.month.toString(),
+          birthdayDay: member.birthday.day.toString(),
+          birthdayYear: member.birthday.year.toString(),
+          sex: member.sex,
+          civilStatus: member.civilStatus,
+          youthClassification: member.youthClassification,
+          youthAgeGroup: member.youthAgeGroup,
+          emailAddress: member.email,
+          contactNumber: member.contactNumber,
+          homeAddress: member.homeAddress,
+          educationalAttainment: member.educationalAttainment,
+          workStatus: member.workStatus,
+          registeredVoter: member.isRegisteredVoter ? "Y" : "N",
+          votedLastElection: member.votedLastElection ? "Y" : "N",
+          attendedKKAssembly: member.attendedKKAssembly ? "Y" : "N",
+          assemblyFrequency: member.assemblyFrequency?.toString() || "0"
+        };
+      });
+      setReportMembers(transformedMembers);
+    }
+  };
+
+  // Function to update a specific field of a member in the report table
+  // (This won't affect the main data store)
+  const updateMember = (index: number, field: string, value: string) => {
+    const updatedMembers = [...reportMembers];
+    updatedMembers[index] = {
+      ...updatedMembers[index],
+      [field]: value
+    };
+    setReportMembers(updatedMembers);
+  };
 
   // Function to add a new empty row
   const addRow = () => {
-    const lastMember = members[members.length - 1];
+    const lastMember = reportMembers[reportMembers.length - 1];
     const newMember = createEmptyMember();
     
     // Copy location data from last row for convenience
@@ -74,74 +165,7 @@ export default function ReportsPage() {
     newMember.cityMunicipality = lastMember.cityMunicipality;
     newMember.barangay = lastMember.barangay;
     
-    setMembers([...members, newMember]);
-  };
-
-  // Function to update a specific field of a member
-  const updateMember = (index: number, field: string, value: string) => {
-    const updatedMembers = [...members];
-    updatedMembers[index] = {
-      ...updatedMembers[index],
-      [field]: value
-    };
-    setMembers(updatedMembers);
-  };
-
-  // Function to handle print
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // Function to add members from the member database
-  const importFromDatabase = () => {
-    // This would normally fetch data from your API
-    // For now, we'll just add some sample data
-    const sampleData = [
-      {
-        region: "REGION X",
-        province: "MISAMIS ORIENTAL",
-        cityMunicipality: "CAGAYAN DE ORO CITY",
-        barangay: "BARANGAY KAUSWAGAN",
-        name: "Viola, Courtney",
-        age: "22",
-        birthday: "06/15/2001",
-        sex: "Female",
-        civilStatus: "Single",
-        youthClassification: "Working Youth",
-        educationalAttainment: "College Graduate",
-        emailAddress: "courtney@example.com",
-        contactNumber: "09123456789",
-        homeAddress: "123 Main St, Proper",
-        workStatus: "Employed",
-        registeredVoter: "Y",
-        attendsGatherings: "Y",
-        skills: "Photography, Writing",
-        ifEmployed: "Web Developer"
-      },
-      {
-        region: "REGION X",
-        province: "MISAMIS ORIENTAL",
-        cityMunicipality: "CAGAYAN DE ORO CITY",
-        barangay: "BARANGAY KAUSWAGAN",
-        name: "Santos, Miguel",
-        age: "19",
-        birthday: "03/22/2004",
-        sex: "Male",
-        civilStatus: "Single",
-        youthClassification: "In School Youth",
-        educationalAttainment: "College Undergraduate",
-        emailAddress: "miguel@example.com",
-        contactNumber: "09987654321",
-        homeAddress: "456 Secondary St, Barangay 76",
-        workStatus: "Student",
-        registeredVoter: "Y",
-        attendsGatherings: "N",
-        skills: "Basketball, Singing",
-        ifEmployed: ""
-      }
-    ];
-    
-    setMembers([...members, ...sampleData]);
+    setReportMembers([...reportMembers, newMember]);
   };
 
   // Function to handle file import
@@ -180,9 +204,9 @@ export default function ReportsPage() {
 
   return (
     <>
-      {/* Print Styles */}
       <style jsx global>{`
         @media print {
+          /* Minimal print styles for when export produces a PDF */
           @page {
             size: landscape;
             margin: 0.5cm;
@@ -196,13 +220,11 @@ export default function ReportsPage() {
             display: none !important;
           }
           
-          .print\\:block {
-            display: block !important;
-          }
-          
           table {
             font-size: 8pt;
             page-break-inside: auto;
+            border-collapse: collapse;
+            width: 100%;
           }
           
           tr {
@@ -212,13 +234,7 @@ export default function ReportsPage() {
           
           td, th {
             padding: 1mm !important;
-          }
-          
-          input {
-            border: none;
-            background: transparent;
-            padding: 0;
-            font-family: inherit;
+            border: 1px solid black;
           }
         }
       `}</style>
@@ -253,17 +269,8 @@ export default function ReportsPage() {
                 onClick={importFromDatabase}
                 className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium text-sm"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Create New
-              </button>
-              
-              {/* Print Button */}
-              <button
-                onClick={handlePrint}
-                className="inline-flex items-center px-4 py-2 bg-[#0B51A6] text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Print
+                <FileText className="h-4 w-4 mr-2" />
+                Refresh from Members
               </button>
             </div>
           </div>
@@ -271,56 +278,62 @@ export default function ReportsPage() {
 
         {/* Report Content */}
         <div className="p-4 sm:p-6">
-          <div className="bg-white border border-gray-200 rounded-sm shadow-sm p-4 sm:p-6 mb-6">
-            {/* Form Title and Instruction Section */}
-            <div className="print:block">
-              <div className="text-right mb-2">
-                <h3 className="text-lg font-bold">ANNEX 4</h3>
+          <div className="bg-white border border-gray-200 rounded-md shadow-sm p-4 sm:p-6">
+            {/* Annex 4 Header - visible in both screen and print */}
+            <div className="annex-header mb-6 text-center">
+              <div className="flex justify-center mb-2">
+                <img src="/SKOfficial.svg" alt="SK Logo" className="h-24 w-auto" />
               </div>
-              <div className="mb-8">
-                <h3 className="font-bold mb-2">Instructions:</h3>
-                <p className="mb-2">Dear SK Officials,</p>
-                <p className="mb-2">Congratulations for being elected as primary movers in youth development in your locality.</p>
-                <p className="mb-2">The fundamental purpose of youth profiling is to be able to come up with a complete list of all youth ages 15-30 years old in your respective barangay. The said data gathering also aim to come up with relevant interventions through programs and projects based on the profiles of the youth in the area and identified issues and recommendations.</p>
-                <p className="mb-2">Please ensure that all youth in the barangay including yourselves are part of the list.</p>
-                <p className="mb-2 italic">Mabuhay ang Kabataang Pilipino!</p>
+              <div className="text-center mb-1">
+                <h2 className="font-bold text-lg">BARANGAY {reportMembers[0]?.barangay?.replace("BARANGAY ", "") || "SAN MIGUEL"}</h2>
               </div>
-              
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-bold uppercase">KATIPUNAN NG KABATAAN YOUTH PROFILE</h2>
+              <div className="flex justify-between items-center">
+                <div className="w-1/3"></div>
+                <div className="w-1/3 text-center">
+                  <h1 className="font-bold text-lg uppercase">KATIPUNAN NG KABATAAN YOUTH PROFILE</h1>
+                </div>
+                <div className="w-1/3 text-right">
+                  <span className="font-bold">ANNEX 4</span>
+                </div>
               </div>
             </div>
-
-            {/* Table with all the fields */}
+            
+            {/* Annex 4 Table */}
             <div className="overflow-x-auto">
-              <table className="min-w-full border border-gray-300 text-xs">
+              <table className="min-w-full border border-gray-800 text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead>
+                  <tr className="bg-gray-100 text-center">
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">REGION</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">PROVINCE</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">CITY/ MUNICIPALITY</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">BARANGAY</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">NAME</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">AGE</th>
+                    <th colSpan={3} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">BIRTHDAY</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">SEX ASSIGNED AT BIRTH</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">CIVIL STATUS</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">YOUTH CLASSIFICATION (ISY/OSY/NEET/WORKING/ PWD)</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">YOUTH AGE GROUP</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">EMAIL ADDRESS</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">CONTACT NUMBER</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">HOME ADDRESS</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">HIGHEST EDUCATIONAL ATTAINMENT</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">WORK STATUS</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">Registered Voter? Y/N</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">Voted Last Election Y/N</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">Attended KK Assembly? Y/N</th>
+                    <th rowSpan={2} className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">If yes, how many times?</th>
+                  </tr>
                   <tr className="bg-gray-100">
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">REGION</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">PROVINCE</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">CITY/ MUNICIPALITY</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">BARANGAY</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">NAME</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">AGE</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">BIRTHDAY</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">SEX ASSIGNED AT BIRTH</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">CIVIL STATUS</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">YOUTH CLASSIFICATION (IN SCHOOL/OSY/WORKING)</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">EDUCATIONAL ATTAINMENT</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">EMAIL ADDRESS</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">CONTACT NUMBER</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">HOME ADDRESS</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">WORK STATUS</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">REGISTERED VOTER? (Y/N)</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">ATTENDS SK/KK GATHERINGS? (Y/N)</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">SKILLS/ TALENTS</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center uppercase font-medium w-1/16">IF EMPLOYED, POSITION</th>
+                    <th className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">M</th>
+                    <th className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">D</th>
+                    <th className="border border-gray-800 px-1 py-1 text-center uppercase font-medium">Y</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((member, index) => (
+                  {reportMembers.map((member, index) => (
                     <tr key={index}>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -328,7 +341,7 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "region", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -336,7 +349,7 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "province", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -344,7 +357,7 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "cityMunicipality", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -352,7 +365,7 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "barangay", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -360,55 +373,74 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "name", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
                           value={member.age}
                           onChange={(e) => updateMember(index, "age", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
-                          value={member.birthday}
-                          onChange={(e) => updateMember(index, "birthday", e.target.value)}
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.birthdayMonth}
+                          onChange={(e) => updateMember(index, "birthdayMonth", e.target.value)}
+                          placeholder="MM"
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.birthdayDay}
+                          onChange={(e) => updateMember(index, "birthdayDay", e.target.value)}
+                          placeholder="DD"
+                        />
+                      </td>
+                      <td className="border border-gray-800 p-1">
+                        <input
+                          type="text"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.birthdayYear}
+                          onChange={(e) => updateMember(index, "birthdayYear", e.target.value)}
+                          placeholder="YYYY"
+                        />
+                      </td>
+                      <td className="border border-gray-800 p-1">
+                        <input
+                          type="text"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
                           value={member.sex}
                           onChange={(e) => updateMember(index, "sex", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
                           value={member.civilStatus}
                           onChange={(e) => updateMember(index, "civilStatus", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
                           value={member.youthClassification}
                           onChange={(e) => updateMember(index, "youthClassification", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
-                          value={member.educationalAttainment}
-                          onChange={(e) => updateMember(index, "educationalAttainment", e.target.value)}
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.youthAgeGroup}
+                          onChange={(e) => updateMember(index, "youthAgeGroup", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -416,7 +448,7 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "emailAddress", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -424,7 +456,7 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "contactNumber", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -432,7 +464,15 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "homeAddress", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
+                        <input
+                          type="text"
+                          className="w-full px-1 py-1 text-xs focus:outline-none"
+                          value={member.educationalAttainment}
+                          onChange={(e) => updateMember(index, "educationalAttainment", e.target.value)}
+                        />
+                      </td>
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
                           className="w-full px-1 py-1 text-xs focus:outline-none"
@@ -440,36 +480,39 @@ export default function ReportsPage() {
                           onChange={(e) => updateMember(index, "workStatus", e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
                           value={member.registeredVoter}
                           onChange={(e) => updateMember(index, "registeredVoter", e.target.value)}
+                          placeholder="Y/N"
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
-                          value={member.attendsGatherings}
-                          onChange={(e) => updateMember(index, "attendsGatherings", e.target.value)}
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.votedLastElection}
+                          onChange={(e) => updateMember(index, "votedLastElection", e.target.value)}
+                          placeholder="Y/N"
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
-                          value={member.skills}
-                          onChange={(e) => updateMember(index, "skills", e.target.value)}
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.attendedKKAssembly}
+                          onChange={(e) => updateMember(index, "attendedKKAssembly", e.target.value)}
+                          placeholder="Y/N"
                         />
                       </td>
-                      <td className="border border-gray-300 p-1">
+                      <td className="border border-gray-800 p-1">
                         <input
                           type="text"
-                          className="w-full px-1 py-1 text-xs focus:outline-none"
-                          value={member.ifEmployed}
-                          onChange={(e) => updateMember(index, "ifEmployed", e.target.value)}
+                          className="w-full px-1 py-1 text-xs focus:outline-none text-center"
+                          value={member.assemblyFrequency}
+                          onChange={(e) => updateMember(index, "assemblyFrequency", e.target.value)}
                         />
                       </td>
                     </tr>
@@ -478,18 +521,7 @@ export default function ReportsPage() {
               </table>
             </div>
             
-            {/* Add Row Button - hidden when printing */}
-            <div className="mt-4 print:hidden">
-              <button
-                onClick={addRow}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded border border-gray-300 hover:bg-gray-200 inline-flex items-center text-xs font-medium"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Add Row
-              </button>
-            </div>
-            
-            {/* Form Actions - hidden when printing */}
+            {/* Action Buttons */}
             <div className="mt-8 flex justify-between items-center print:hidden">
               <Link 
                 href="/members" 
@@ -498,13 +530,6 @@ export default function ReportsPage() {
                 Back to Members
               </Link>
               <div className="flex gap-2">
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center px-4 py-2 bg-[#0B51A6] text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm"
-                >
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print
-                </button>
                 <button 
                   onClick={() => setShowExportModal(true)}
                   className="inline-flex items-center px-4 py-2 bg-[#FEC425] text-white rounded-md hover:bg-yellow-500 transition-colors font-medium text-sm"
@@ -519,40 +544,42 @@ export default function ReportsPage() {
         
         {/* Report History Modal */}
         {showReportHistory && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-[#0B51A6]">Report History</h3>
+          <div className="fixed inset-0 backdrop-blur-sm bg-gray-700/30 flex items-center justify-center z-50 transition-opacity duration-300">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl border border-gray-200">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-[#0B51A6]">Report History</h3>
                 <button 
                   onClick={() => setShowReportHistory(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               
-              <div className="border rounded-md divide-y">
+              <div className="border rounded-md divide-y max-h-[60vh] overflow-y-auto">
                 {reportHistory.map(report => (
-                  <div key={report.id} className="p-3 hover:bg-gray-50 flex items-center justify-between">
+                  <div key={report.id} className="p-4 hover:bg-gray-50 flex items-center justify-between">
                     <div>
-                      <p className="font-medium">{report.title}</p>
-                      <div className="flex items-center text-sm text-gray-500 mt-1">
-                        <Calendar className="h-3 w-3 mr-1" />
+                      <p className="font-medium text-base">{report.title}</p>
+                      <div className="flex items-center text-sm text-gray-500 mt-2">
+                        <Calendar className="h-4 w-4 mr-2" />
                         <span>{report.date}</span>
                       </div>
                     </div>
                     <div className="flex items-center">
-                      <span className="px-2 py-1 bg-gray-100 text-xs rounded-md mr-2">{report.format}</span>
-                      <Download className="h-4 w-4 text-gray-500 hover:text-[#0B51A6] cursor-pointer" />
+                      <span className="px-3 py-1 bg-gray-100 text-sm rounded-md mr-3">{report.format}</span>
+                      <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                        <Download className="h-5 w-5 text-gray-600 hover:text-[#0B51A6]" />
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
               
-              <div className="mt-4 flex justify-end">
+              <div className="mt-6 flex justify-end">
                 <button
                   onClick={() => setShowReportHistory(false)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded border border-gray-300 hover:bg-gray-200 text-sm"
+                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-md border border-gray-300 hover:bg-gray-200 text-sm font-medium transition-colors"
                 >
                   Close
                 </button>
@@ -563,52 +590,52 @@ export default function ReportsPage() {
         
         {/* Export Modal */}
         {showExportModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-[#0B51A6]">Export Report</h3>
+          <div className="fixed inset-0 backdrop-blur-sm bg-gray-700/30 flex items-center justify-center z-50 transition-opacity duration-300">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-[#0B51A6]">Export Report</h3>
                 <button 
                   onClick={() => setShowExportModal(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               
               <div>
-                <div className="mb-4">
-                  <label htmlFor="reportTitle" className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="mb-5">
+                  <label htmlFor="reportTitle" className="block text-sm font-medium text-gray-700 mb-2">
                     Report Title
                   </label>
                   <input
                     type="text"
                     id="reportTitle"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#0B51A6]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#0B51A6]"
                     placeholder="Enter report title"
                     value={exportData.title}
                     onChange={(e) => setExportData({...exportData, title: e.target.value})}
                   />
                 </div>
                 
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Export Format
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     <button
-                      className={`flex items-center justify-center px-3 py-2 border rounded-md ${exportData.format === 'pdf' ? 'bg-[#0B51A6] text-white border-[#0B51A6]' : 'bg-white text-gray-700 border-gray-300'}`}
+                      className={`flex items-center justify-center px-4 py-3 border rounded-md transition-colors ${exportData.format === 'pdf' ? 'bg-[#0B51A6] text-white border-[#0B51A6]' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                       onClick={() => setExportData({...exportData, format: 'pdf'})}
                     >
                       PDF
                     </button>
                     <button
-                      className={`flex items-center justify-center px-3 py-2 border rounded-md ${exportData.format === 'xlsx' ? 'bg-[#0B51A6] text-white border-[#0B51A6]' : 'bg-white text-gray-700 border-gray-300'}`}
+                      className={`flex items-center justify-center px-4 py-3 border rounded-md transition-colors ${exportData.format === 'xlsx' ? 'bg-[#0B51A6] text-white border-[#0B51A6]' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                       onClick={() => setExportData({...exportData, format: 'xlsx'})}
                     >
                       XLSX
                     </button>
                     <button
-                      className={`flex items-center justify-center px-3 py-2 border rounded-md ${exportData.format === 'docx' ? 'bg-[#0B51A6] text-white border-[#0B51A6]' : 'bg-white text-gray-700 border-gray-300'}`}
+                      className={`flex items-center justify-center px-4 py-3 border rounded-md transition-colors ${exportData.format === 'docx' ? 'bg-[#0B51A6] text-white border-[#0B51A6]' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                       onClick={() => setExportData({...exportData, format: 'docx'})}
                     >
                       DOCX
@@ -617,24 +644,39 @@ export default function ReportsPage() {
                 </div>
               </div>
               
-              <div className="mt-6 flex justify-end gap-2">
+              <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => setShowExportModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded border border-gray-300 hover:bg-gray-200 text-sm"
+                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-md border border-gray-300 hover:bg-gray-200 text-sm font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleExport}
-                  className="px-4 py-2 bg-[#FEC425] text-white rounded-md hover:bg-yellow-500 text-sm"
+                  className="px-5 py-2 bg-[#FEC425] text-white rounded-md hover:bg-yellow-500 text-sm font-medium transition-colors flex items-center"
                 >
-                  Export
+                  <Download className="h-4 w-4 mr-2" /> Export
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Add proper error handling with a fallback */}
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            const logo = document.querySelector('img[alt="SK Logo"]');
+            if (logo) {
+              logo.onerror = function() {
+                console.log('Logo failed to load, trying alternate');
+                logo.src = '/SKPro-Logo.svg';
+              };
+            }
+          });
+        `
+      }} />
     </>
   );
 } 

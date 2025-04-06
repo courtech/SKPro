@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   Search, 
   Plus, 
@@ -18,97 +19,10 @@ import {
   Users,
   User,
   MapPin,
-  ChevronUp,
-  Maximize2
+  ChevronUp
 } from "lucide-react";
-
-// Updated member interface based on the KK Youth Profile table
-interface Member {
-  id: string;
-  region: string;
-  province: string;
-  cityMunicipality: string;
-  barangay: string;
-  name: string;
-  age: number;
-  birthday: {
-    month: number;
-    day: number;
-    year: number;
-  };
-  sex: string;
-  civilStatus: string;
-  youthClassification: string;
-  youthAgeGroup: string;
-  email: string;
-  contactNumber: string;
-  homeAddress: string;
-  educationalAttainment: string;
-  workStatus: string;
-  isRegisteredVoter: boolean;
-  votedLastElection: boolean;
-  attendedKKAssembly: boolean;
-  assemblyFrequency?: number;
-}
-
-// Sample data based on the KK Youth Profile fields
-const sampleMembers: Member[] = [
-  {
-    id: "KK1001",
-    region: "NCR",
-    province: "Metro Manila",
-    cityMunicipality: "Quezon City",
-    barangay: "Commonwealth",
-    name: "Viola, Courtney",
-    age: 22,
-    birthday: {
-      month: 5,
-      day: 15,
-      year: 2001
-    },
-    sex: "Female",
-    civilStatus: "Single",
-    youthClassification: "OSY",
-    youthAgeGroup: "18-24",
-    email: "courtney.v@example.com",
-    contactNumber: "09123456789",
-    homeAddress: "123 Main St., Brgy. Commonwealth",
-    educationalAttainment: "College Level",
-    workStatus: "Self-Employed",
-    isRegisteredVoter: true,
-    votedLastElection: true,
-    attendedKKAssembly: true,
-    assemblyFrequency: 3
-  },
-  {
-    id: "KK1002",
-    region: "NCR",
-    province: "Metro Manila",
-    cityMunicipality: "Quezon City",
-    barangay: "Batasan Hills",
-    name: "Santos, Miguel",
-    age: 19,
-    birthday: {
-      month: 8,
-      day: 22,
-      year: 2004
-    },
-    sex: "Male",
-    civilStatus: "Single",
-    youthClassification: "ISY",
-    youthAgeGroup: "18-24",
-    email: "miguel.s@example.com",
-    contactNumber: "09187654321",
-    homeAddress: "456 Second St., Brgy. Batasan Hills",
-    educationalAttainment: "College Level",
-    workStatus: "N/A",
-    isRegisteredVoter: true,
-    votedLastElection: false,
-    attendedKKAssembly: false,
-    assemblyFrequency: 0
-  },
-  // Keep other sample data entries with updated fields...
-];
+import { Member } from "@/types/member";
+import { useMemberStore } from "@/lib/store/memberStore";
 
 const statusOptions = ["All", "ISY", "OSY", "NEET", "PWD"];
 const genderOptions = ["All", "Male", "Female"];
@@ -184,11 +98,17 @@ const CustomDropdown = ({
 };
 
 export default function MembersPage() {
-  const [members, setMembers] = useState(sampleMembers);
-  const [filteredMembers, setFilteredMembers] = useState(sampleMembers);
+  const { members, fetchMembers, isLoading } = useMemberStore();
+  const [filteredMembers, setFilteredMembers] = useState<Member[]>([]);
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+  const router = useRouter();
+  
+  // Fetch members on component mount
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
   
   const itemsPerPage = 10;
   
@@ -272,7 +192,7 @@ export default function MembersPage() {
   };
   
   return (
-    <div className="bg-gray-50 min-h-screen p-4 sm:p-6 font-poppins">
+    <div className="bg-gray-50 min-h-screen p-2 sm:p-4 font-poppins">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#0B51A6] mb-2">Katipunan ng Kabataan Youth Profile</h1>
         <p className="text-gray-600">Manage and view all KK youth members</p>
@@ -282,7 +202,7 @@ export default function MembersPage() {
       <div className="bg-white border border-gray-200 rounded-sm shadow-sm p-4 mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto mb-4 sm:mb-0">
-            <div className="relative w-full sm:w-64">
+            <div className="relative w-full sm:w-96">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-gray-400" />
               </div>
@@ -297,7 +217,7 @@ export default function MembersPage() {
             
             <button
               onClick={() => requestSort('name')}
-              className="flex items-center justify-center gap-1 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-md hover:bg-gray-200 transition duration-300"
+              className="flex items-center justify-center gap-1 px-4 py-2 border border-[#D1D5DC] text-[#364153] bg-transparent font-medium rounded-md hover:bg-[#0B51A6]/5 transition duration-300"
             >
               <span>A-Z Sort</span>
               {getSortIndicator('name')}
@@ -307,7 +227,7 @@ export default function MembersPage() {
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Link 
               href="/members/add"
-              className="flex items-center justify-center gap-1 px-4 py-2 bg-[#0B51A6] text-white font-medium rounded-md hover:bg-[#0A4585] transition duration-300 w-full sm:w-auto"
+              className="flex items-center justify-center gap-1 px-4 py-2 border border-[#FF6C7D] text-[#E1362C] bg-transparent font-medium rounded-md hover:bg-[#E1362C]/5 transition duration-300 w-full sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               <span>Add Member</span>
@@ -502,22 +422,23 @@ export default function MembersPage() {
               >
                 If yes, how many times?
               </th>
-              <th scope="col" className="relative px-6 py-3">
-                <span className="sr-only">Actions</span>
-              </th>
             </tr>
             <tr className="bg-gray-50">
               <th colSpan={6} className="px-6 py-1"></th>
               <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">M</th>
               <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">D</th>
               <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Y</th>
-              <th colSpan={12} className="px-6 py-1"></th>
+              <th colSpan={11} className="px-6 py-1"></th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {currentItems.length > 0 ? (
               currentItems.map((member) => (
-                <tr key={member.id} className="hover:bg-gray-50">
+                <tr 
+                  key={member.id} 
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => router.push(`/members/${member.id}`)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{member.region}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{member.province}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{member.cityMunicipality}</td>
@@ -547,13 +468,6 @@ export default function MembersPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
                     {member.assemblyFrequency || '0'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Link href={`/members/${member.id}`} className="text-blue-600 hover:text-blue-900">
-                        <Maximize2 className="h-4 w-4" />
-                      </Link>
-                    </div>
                   </td>
                 </tr>
               ))
