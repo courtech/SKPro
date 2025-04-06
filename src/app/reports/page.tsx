@@ -299,7 +299,7 @@ export default function ReportsPage() {
               {/* Single Primary Report Creation Button */}
               <button
                 onClick={() => setShowNewReportModal(true)}
-                className="inline-flex items-center px-4 py-2 bg-[#FEC425] text-white rounded-md hover:bg-yellow-500 transition-colors font-medium text-sm"
+                className="inline-flex items-center px-4 py-2 bg-[#FFB937] text-white rounded-md hover:bg-yellow-500 transition-colors font-medium text-sm"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Generate Quarterly Report
