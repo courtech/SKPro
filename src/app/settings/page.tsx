@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { Building, Lock, Save, RefreshCw } from "lucide-react";
 import { Toaster, toast } from "react-hot-toast";
-import Navbar from "@/components/layout/Navbar";
 
 // Simplified tab components
 import OrganizationSettings from "./tabs/OrganizationSettings";
@@ -53,9 +52,6 @@ export default function SettingsPage() {
   return (
     <div className="bg-gray-50 min-h-screen">
       <Toaster position="top-right" />
-      
-      {/* Add Navbar */}
-      <Navbar />
       
       {/* Main Content */}
       <div className="container mx-auto p-4 sm:p-6">

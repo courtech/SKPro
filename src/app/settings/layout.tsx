@@ -2,7 +2,7 @@ import React from "react";
 import Navbar from "@/components/layout/Navbar";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-export default function MembersLayout({
+export default function SettingsLayout({
   children,
 }: {
   children: React.ReactNode;
