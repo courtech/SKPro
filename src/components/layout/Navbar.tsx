@@ -4,7 +4,10 @@ import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Settings, LogOut } from "lucide-react";
+import { Bell, Settings, LogOut, MapPin } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSKInfo } from "@/hooks/useSKInfo";
+import { toast } from "react-hot-toast";
 // Import Image directly from public directory
 // import SKProLogo from "@/assets/SKPro-Long.svg";
 
@@ -13,6 +16,8 @@ export default function Navbar() {
   const router = useRouter();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const { user, signOut } = useAuth();
+  const { skInfo, getShortLocation, getFullLocation } = useSKInfo();
   
   // Get current date
   const currentDate = new Date();
@@ -22,6 +27,14 @@ export default function Navbar() {
     year: 'numeric'
   });
   
+  // Get user initial for avatar
+  const getUserInitial = () => {
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return "U";
+  };
+
   // Check if a path is active
   const isActive = (path: string) => {
     if (path === '/dashboard') {
@@ -45,11 +58,15 @@ export default function Navbar() {
   }, []);
 
   // Handle logout
-  const handleLogout = () => {
-    // Add actual logout logic here
-    console.log("Logging out...");
-    // Redirect to login page or home page after logout
-    // router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success("Logged out successfully");
+      // Router push is handled inside the signOut function in AuthContext
+    } catch (error) {
+      console.error("Error logging out:", error);
+      toast.error("Failed to log out");
+    }
   };
   
   return (
@@ -115,20 +132,38 @@ export default function Navbar() {
               className="w-9 h-9 bg-orange-400 rounded-full flex items-center justify-center text-white cursor-pointer"
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
-              C
+              {getUserInitial()}
             </div>
             
             {/* Profile Dropdown Menu */}
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200 dropdown-animation">
-                <div className="px-4 py-2 border-b border-gray-100 flex items-center">
-                  <div className="w-8 h-8 bg-orange-400 rounded-full flex items-center justify-center text-white mr-3">
-                    C
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200 dropdown-animation">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <div className="flex items-center mb-2">
+                    <div className="w-8 h-8 bg-orange-400 rounded-full flex items-center justify-center text-white mr-3">
+                      {getUserInitial()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {user?.displayName || "SK Official"}
+                      </p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Courtney Smith</p>
-                    <p className="text-xs text-gray-500">admin@skpro.org</p>
-                  </div>
+                  
+                  {skInfo.officialBarangayName && (
+                    <div className="text-xs text-gray-600 mt-2">
+                      <div className="flex items-start mb-1">
+                        <MapPin className="h-3 w-3 mr-1 mt-0.5 text-gray-400" />
+                        <p className="leading-tight">
+                          {getShortLocation()}
+                        </p>
+                      </div>
+                      <p className="leading-tight pl-4">
+                        {skInfo.province}, {skInfo.region}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 
                 <Link 

@@ -1,5 +1,6 @@
 import React from "react";
 import Navbar from "@/components/layout/Navbar";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 export default function ReportsLayout({
   children,
@@ -7,9 +8,9 @@ export default function ReportsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <ProtectedRoute>
       <Navbar />
       {children}
-    </>
+    </ProtectedRoute>
   );
 } 

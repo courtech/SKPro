@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Users, Vote, UserCheck, UserX, LucideIcon, ChevronDown, MoreHorizontal, ArrowRight } from "lucide-react";
+import { Users, Vote, UserCheck, UserX, LucideIcon, ChevronDown, MoreHorizontal, ArrowRight, MapPin } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -17,6 +17,7 @@ import {
   Legend,
 } from "recharts";
 import Link from "next/link";
+import { useSKInfo } from "@/hooks/useSKInfo";
 
 // Color palette - centralized for consistency
 const colors = {
@@ -258,6 +259,7 @@ const CustomLegend = ({ data }: { data: PieChartData[] }) => {
 export default function DashboardPage() {
   const [selectedYouthClass, setSelectedYouthClass] = useState("Youth Classification");
   const [selectedAgeGroup, setSelectedAgeGroup] = useState("All Ages");
+  const { skInfo, getFormattedBarangayName, getFullLocation } = useSKInfo();
   
   // Options for dropdowns
   const ageGroupOptions = ["All Ages", "15-17 years", "18-21 years", "22+ years"];
@@ -271,6 +273,13 @@ export default function DashboardPage() {
           <div className="mb-4 sm:mb-0">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0B51A6] font-poppins">Welcome Back, <span className="text-[#E1362C]">SK Official!</span></h1>
             <p className="text-sm text-gray-600 mt-1 font-poppins">Here's what's happening with your KK members today.</p>
+            
+            {skInfo.officialBarangayName && (
+              <div className="flex items-center mt-2 text-gray-600">
+                <MapPin className="h-4 w-4 mr-1 text-[#E1362C]" />
+                <p className="text-sm font-medium">{getFormattedBarangayName()}, {skInfo.municipality}</p>
+              </div>
+            )}
           </div>
           <Link 
             href="/members/add" 
@@ -280,8 +289,8 @@ export default function DashboardPage() {
             Add Member
           </Link>
         </div>
-        </div>
-        
+      </div>
+      
       {/* Row 1: Status Cards */}
       <div className="p-4 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
