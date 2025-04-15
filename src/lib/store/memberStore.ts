@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Member } from '@/types/member';
-import dummyMembers from '@/data/dummyMembers';
+import { Member, convertToLegacyMember } from '@/types/member';
+import { getMembersByBarangay } from '@/services/firebase/members';
 
 interface MemberState {
   members: Member[];
@@ -9,7 +9,7 @@ interface MemberState {
   error: string | null;
   
   // Actions
-  fetchMembers: () => Promise<void>;
+  fetchMembers: (barangayId: string) => Promise<void>;
   addMember: (member: Member) => void;
   updateMember: (id: string, updatedMember: Partial<Member>) => void;
   deleteMember: (id: string) => void;
@@ -18,22 +18,25 @@ interface MemberState {
 export const useMemberStore = create<MemberState>()(
   persist(
     (set, get) => ({
-      members: dummyMembers,
+      members: [], // Initialize with empty array instead of mock data
       isLoading: false,
       error: null,
 
-      fetchMembers: async () => {
+      fetchMembers: async (barangayId: string) => {
         set({ isLoading: true, error: null });
         try {
-          // In a real app, this would be an API call
-          // For now, we'll just use the dummy data
-          // const response = await fetch('/api/members');
-          // const data = await response.json();
+          // Use the Firebase service to fetch members from Firestore
+          // using the provided barangayId
+          if (!barangayId) {
+            throw new Error('No barangay ID provided');
+          }
           
-          // Simulate API delay
-          await new Promise(resolve => setTimeout(resolve, 500));
+          const firestoreMembers = await getMembersByBarangay(barangayId);
           
-          set({ members: dummyMembers, isLoading: false });
+          // Convert Firestore members to the legacy format expected by the UI
+          const legacyMembers = firestoreMembers.map(convertToLegacyMember);
+          
+          set({ members: legacyMembers, isLoading: false });
         } catch (error) {
           set({ 
             error: error instanceof Error ? error.message : 'Failed to fetch members', 

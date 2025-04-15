@@ -96,7 +96,7 @@ const StatusCard = ({ title, value, icon: Icon, change }: StatusCardProps) => {
         {change && (
           <div className="flex items-center mt-1">
             <span className={`text-xs font-medium font-poppins ${change.isPositive ? 'text-green-500' : 'text-red-500'}`}>
-              {change.isPositive ? '↑' : '↓'} {change.value} Since last week
+              {change.isPositive ? '↑' : '↓'} {change.value} 
             </span>
           </div>
         )}
@@ -257,14 +257,173 @@ const CustomLegend = ({ data }: { data: PieChartData[] }) => {
 };
 
 export default function DashboardPage() {
+  const [currentPeriod, setCurrentPeriod] = useState("This Quarter");
+  const [currentClassification, setCurrentClassification] = useState("All Youth");
   const [selectedYouthClass, setSelectedYouthClass] = useState("Youth Classification");
   const [selectedAgeGroup, setSelectedAgeGroup] = useState("All Ages");
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState({
+    totalMembers: 0,
+    activeProfiles: 0,
+    incompleteProfiles: 0,
+    registeredVoters: 0,
+    youthClassification: [] as PieChartData[],
+    ageDistribution: [] as AgeData[],
+    recentMembers: [] as Member[]
+  });
   const { skInfo, getFormattedBarangayName, getFullLocation } = useSKInfo();
   
   // Options for dropdowns
   const ageGroupOptions = ["All Ages", "15-17 years", "18-21 years", "22+ years"];
   const youthClassOptions = ["Youth Classification", "School Status", "Employment Status"];
   
+  // Fetch dashboard data from Firestore
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      
+      try {
+        // In a real implementation, get barangayId from auth context
+        const barangayId = 'default';
+        
+        // Import the firebase services
+        const { getMembersByBarangay } = await import('@/services/firebase/members');
+        
+        // Fetch members for the current barangay
+        const members = await getMembersByBarangay(barangayId);
+        
+        if (members.length === 0) {
+          // If no members, set empty dashboard
+          setDashboardData({
+            totalMembers: 0,
+            activeProfiles: 0,
+            incompleteProfiles: 0,
+            registeredVoters: 0,
+            youthClassification: [],
+            ageDistribution: [],
+            recentMembers: []
+          });
+        } else {
+          // Process members to generate statistics
+          const totalMembers = members.length;
+          const activeProfiles = members.filter(m => m.firstName && m.lastName).length;
+          const incompleteProfiles = totalMembers - activeProfiles;
+          const registeredVoters = members.filter(m => m.registeredSKVoter === 'Y').length;
+          
+          // Calculate youth classification distribution
+          const classificationCount = {
+            'In-School Youth': 0,
+            'Out-of-School Youth': 0,
+            'Working Youth': 0,
+            'Others': 0
+          };
+          
+          members.forEach(member => {
+            if (member.youthClassification in classificationCount) {
+              classificationCount[member.youthClassification as keyof typeof classificationCount]++;
+            } else {
+              classificationCount['Others']++;
+            }
+          });
+          
+          const youthClassification = [
+            { 
+              name: "In-School Youth", 
+              value: classificationCount['In-School Youth'], 
+              percentage: `${Math.round((classificationCount['In-School Youth'] / totalMembers) * 100)}%`, 
+              color: colors.chart.blue 
+            },
+            { 
+              name: "Out-of-School Youth", 
+              value: classificationCount['Out-of-School Youth'], 
+              percentage: `${Math.round((classificationCount['Out-of-School Youth'] / totalMembers) * 100)}%`, 
+              color: colors.chart.green 
+            },
+            { 
+              name: "Working Youth", 
+              value: classificationCount['Working Youth'], 
+              percentage: `${Math.round((classificationCount['Working Youth'] / totalMembers) * 100)}%`, 
+              color: colors.chart.red 
+            },
+            { 
+              name: "Others", 
+              value: classificationCount['Others'], 
+              percentage: `${Math.round((classificationCount['Others'] / totalMembers) * 100)}%`, 
+              color: colors.chart.yellow 
+            }
+          ];
+          
+          // Calculate age distribution
+          const ageGroups = {
+            '16-17 years': { count: 0, color: colors.primary },
+            '18-21 years': { count: 0, color: "#3373B5" },
+            '22-24 years': { count: 0, color: "#5C95C4" },
+            '25-30 years': { count: 0, color: "#84B7D3" }
+          };
+          
+          members.forEach(member => {
+            const age = member.age;
+            if (age >= 16 && age <= 17) ageGroups['16-17 years'].count++;
+            else if (age >= 18 && age <= 21) ageGroups['18-21 years'].count++;
+            else if (age >= 22 && age <= 24) ageGroups['22-24 years'].count++;
+            else if (age >= 25 && age <= 30) ageGroups['25-30 years'].count++;
+          });
+          
+          const ageDistribution = Object.entries(ageGroups).map(([ageGroup, data]) => ({
+            ageGroup,
+            count: data.count,
+            percentage: Math.round((data.count / totalMembers) * 100),
+            color: data.color
+          }));
+          
+          // Get recent members
+          const recentMembers = members
+            .sort((a, b) => {
+              // Sort by createdAt timestamp (newest first)
+              return b.createdAt.toMillis() - a.createdAt.toMillis();
+            })
+            .slice(0, 5)
+            .map(member => ({
+              id: member.id,
+              name: `${member.lastName}, ${member.firstName}`,
+              age: member.age,
+              sex: member.sexAssignedAtBirth,
+              youthGroup: member.youthClassification,
+              sitio: member.sitioPurok || "N/A",
+              civilStatus: member.civilStatus,
+              dateAdded: member.createdAt.toDate().toLocaleDateString()
+            }));
+          
+          setDashboardData({
+            totalMembers,
+            activeProfiles,
+            incompleteProfiles,
+            registeredVoters,
+            youthClassification,
+            ageDistribution,
+            recentMembers
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        // Set empty data on error
+        setDashboardData({
+          totalMembers: 0,
+          activeProfiles: 0,
+          incompleteProfiles: 0,
+          registeredVoters: 0,
+          youthClassification: [],
+          ageDistribution: [],
+          recentMembers: []
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchDashboardData();
+  }, [currentPeriod, currentClassification]);
+
   return (
     <div className="bg-gray-50 min-h-screen font-poppins">
       {/* Header */}
@@ -297,33 +456,33 @@ export default function DashboardPage() {
           <div className="bg-white border border-gray-200 rounded-sm shadow-sm">
           <StatusCard 
               title="Active Profile" 
-            value="458" 
+            value={dashboardData.activeProfiles.toString()} 
             icon={Users} 
-            change={{ value: "12", isPositive: true }}
+            
           />
           </div>
           <div className="bg-white border border-gray-200 rounded-sm shadow-sm">
           <StatusCard 
             title="Registered Voters" 
-              value="380" 
+              value={dashboardData.registeredVoters.toString()} 
             icon={Vote} 
-              change={{ value: "12", isPositive: true }}
+              
           />
           </div>
           <div className="bg-white border border-gray-200 rounded-sm shadow-sm">
           <StatusCard 
             title="Total KK" 
-              value="458" 
+              value={dashboardData.totalMembers.toString()} 
               icon={UserCheck}
-              change={{ value: "12", isPositive: true }}
+              
             />
           </div>
           <div className="bg-white border border-gray-200 rounded-sm shadow-sm">
             <StatusCard 
               title="Incomplete Profile" 
-              value="30" 
+              value={dashboardData.incompleteProfiles.toString()} 
               icon={UserX}
-              change={{ value: "12", isPositive: true }}
+              
             />
           </div>
         </div>
@@ -333,207 +492,182 @@ export default function DashboardPage() {
       <div className="px-4 sm:px-6 pb-4 sm:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Age Distribution Chart */}
-          <div className="bg-white border border-gray-200 rounded-sm shadow-sm p-4 sm:p-6">
-            <div className="flex justify-between items-center mb-4 sm:mb-5">
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-gray-800">Age Distribution</h2>
-                <p className="text-xs sm:text-sm text-gray-500">Distribution of members by age range</p>
-              </div>
-              <div className="flex items-center">
-                <CustomDropdown
-                  options={ageGroupOptions}
-                  selected={selectedAgeGroup}
-                  onChange={setSelectedAgeGroup}
-                  className="w-32 sm:w-40"
-                />
-              </div>
+          <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800">Age Distribution</h3>
+              <CustomDropdown
+                options={ageGroupOptions}
+                selected={selectedAgeGroup}
+                onChange={setSelectedAgeGroup}
+              />
             </div>
             
-            <div className="h-60 sm:h-70">
-              <ResponsiveContainer width="100%" height="100%">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B51A6]"></div>
+              </div>
+            ) : dashboardData.ageDistribution.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                <Users className="h-10 w-10 mb-2 opacity-50" />
+                <p>No data available</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
                 <BarChart
-                  layout="vertical"
-                  data={ageData}
-                  margin={{ top: 20, right: 30, left: 40, bottom: 20 }}
+                  data={dashboardData.ageDistribution}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
-                  <CartesianGrid 
-                    strokeDasharray="3 3" 
-                    horizontal={false} 
-                    stroke="#e0e0e0" 
-                  />
+                  <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
-                    type="number" 
-                    domain={[0, 'dataMax']} 
-                    tick={{ fontFamily: 'Poppins, sans-serif', fontSize: 10 }}
-                    tickCount={6}
-                    axisLine={{ stroke: '#ccc' }}
-                    tickLine={{ stroke: '#ccc' }}
-                    label={{ 
-                      value: 'Number of Members', 
-                      position: 'insideBottom', 
-                      offset: -10,
-                      style: { 
-                        fontFamily: 'Poppins, sans-serif', 
-                        fontSize: '0.7rem'
-                      } 
-                    }}
+                    dataKey="ageGroup" 
+                    tick={{ fontSize: 12 }} 
                   />
                   <YAxis 
-                    dataKey="ageGroup" 
-                    type="category" 
-                    scale="band" 
-                    tick={{ fontSize: 10, fontFamily: 'Poppins, sans-serif' }}
-                    width={70}
-                    axisLine={{ stroke: '#ccc' }}
-                    tickLine={{ stroke: '#ccc' }}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `${value}%`}
                   />
-                  <Tooltip
-                    formatter={(value: number, name: string, props: any) => {
-                      const item = ageData.find(item => item.count === value);
-                      return [`${value} members (${item?.percentage}%)`, 'Count'];
-                    }}
-                    contentStyle={{ 
-                      fontFamily: 'Poppins, sans-serif',
-                      borderRadius: '4px',
-                      border: 'none',
-                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                      fontSize: '0.75rem'
-                    }}
-                    cursor={{ fill: 'rgba(11, 81, 166, 0.1)' }}
+                  <Tooltip 
+                    formatter={(value, name, props) => [`${value}%`, 'Percentage']}
+                    labelFormatter={(value) => `Age Group: ${value}`}
                   />
                   <Bar 
-                    dataKey="count" 
-                    radius={[0, 4, 4, 0]} 
-                    barSize={20}
+                    dataKey="percentage" 
+                    name="Percentage" 
+                    radius={[4, 4, 0, 0]}
                   >
-                    {ageData.map((entry, index) => (
+                    {dashboardData.ageDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-            
-            <div className="flex flex-wrap justify-center mt-2 sm:mt-4 gap-2 sm:gap-4 text-xs sm:text-sm">
-              {ageData.map((entry, index) => (
-                <div key={`legend-${index}`} className="flex items-center">
-                  <div 
-                    className="h-2 w-2 sm:h-3 sm:w-3 rounded-sm mr-1 sm:mr-2" 
-                    style={{ backgroundColor: entry.color }}
-                  ></div>
-                  <span className="text-xs sm:text-sm text-gray-600">
-                    {entry.ageGroup} ({entry.percentage}%)
-                  </span>
-                </div>
-              ))}
-            </div>
+            )}
           </div>
           
-          {/* Youth Classification Pie Chart */}
-          <div className="bg-white border border-gray-200 rounded-sm shadow-sm p-4 sm:p-6">
-            <div className="flex justify-between items-center mb-4 sm:mb-5">
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-gray-800">Youth Classification</h2>
-                <p className="text-xs sm:text-sm text-gray-500">Distribution by educational status</p>
-              </div>
-              <div className="flex items-center">
-                <CustomDropdown
-                  options={youthClassOptions}
-                  selected={selectedYouthClass}
-                  onChange={setSelectedYouthClass}
-                  className="w-36 sm:w-56"
-                />
-              </div>
+          {/* Youth Classification Chart */}
+          <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800">Youth Classification</h3>
+              <CustomDropdown
+                options={youthClassOptions}
+                selected={selectedYouthClass}
+                onChange={setSelectedYouthClass}
+              />
             </div>
             
-            <div className="flex flex-col sm:flex-row justify-between items-center h-60 sm:h-70">
-              <div className="w-full sm:w-3/5">
-                <ResponsiveContainer width="100%" height={200}>
-                  <RechartsPieChart>
-                    <Pie
-                      data={youthClassificationData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={85}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {youthClassificationData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={entry.color} 
-                          stroke="#ffffff"
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number) => [`${value}%`, 'Percentage']}
-                      contentStyle={{ 
-                        fontFamily: 'Poppins, sans-serif',
-                        borderRadius: '4px',
-                        border: 'none',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                        fontSize: '0.75rem'
-                      }}
-                    />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
-        </div>
-        
-              <div className="w-full sm:w-2/5 pt-4 sm:pt-0">
-                <CustomLegend data={youthClassificationData} />
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B51A6]"></div>
               </div>
-            </div>
-            </div>
+            ) : dashboardData.youthClassification.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                <Users className="h-10 w-10 mb-2 opacity-50" />
+                <p>No data available</p>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-center justify-center">
+                {/* Pie Chart */}
+                <div className="w-full sm:w-1/2">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <RechartsPieChart>
+                      <Pie
+                        data={dashboardData.youthClassification}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={80}
+                        dataKey="value"
+                        label={false}
+                      >
+                        {dashboardData.youthClassification.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                {/* Legend */}
+                <div className="w-full sm:w-1/2 flex justify-center">
+                  <CustomLegend data={dashboardData.youthClassification} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
-        
+      </div>
+      
       {/* Row 3: Member List */}
       <div className="px-4 sm:px-6 pb-6 sm:pb-8">
-        <div className="bg-white border border-gray-200 rounded-sm shadow-sm">
-          <div className="p-4 sm:p-6">
-            <div className="flex justify-between items-center mb-4 sm:mb-5">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-800">Recently Added Members</h2>
-              <Link 
-                href="/members" 
-                className="flex items-center text-xs sm:text-sm text-[#0B51A6] font-medium hover:text-blue-800 font-poppins"
-              >
-                View all
-                <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-1" />
-              </Link>
-        </div>
-        
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins">Name</th>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins">Age</th>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins">Sex</th>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins hidden md:table-cell">Youth Group</th>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins hidden sm:table-cell">Sitio</th>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins hidden sm:table-cell">Civil Status</th>
-                    <th scope="col" className="px-3 py-3 text-left text-xxs sm:text-xs font-medium text-gray-500 uppercase tracking-wider font-poppins">Date Added</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {recentMembers.map((member) => (
-                    <tr key={member.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 font-poppins">{member.name}</td>
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins">{member.age}</td>
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins">{member.sex}</td>
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins hidden md:table-cell">{member.youthGroup}</td>
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins hidden sm:table-cell">{member.sitio}</td>
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins hidden sm:table-cell">{member.civilStatus}</td>
-                      <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins">{member.dateAdded}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 overflow-hidden">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800">Recently Added Members</h2>
+              <p className="text-xs text-gray-500 mt-1">View the most recently added KK profile members</p>
             </div>
+            <Link href="/members" className="flex items-center text-xs sm:text-sm text-[#0B51A6] hover:text-[#083b7a] font-medium">
+              View All
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+            </Link>
           </div>
+          
+          {isLoading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B51A6]"></div>
+            </div>
+          ) : dashboardData.recentMembers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+              <Users className="h-10 w-10 mb-2 opacity-50" />
+              <p>No members added yet</p>
+              <Link href="/members/new" className="mt-2 text-sm text-[#0B51A6] hover:underline">
+                Add your first member
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto -mx-4 sm:-mx-6">
+              <div className="inline-block min-w-full align-middle">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-3 py-2 text-left text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wider font-poppins">Name</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wider font-poppins">Age/Sex</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wider font-poppins hidden sm:table-cell">Status</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wider font-poppins hidden md:table-cell">Sitio</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs sm:text-sm font-semibold text-gray-500 uppercase tracking-wider font-poppins">Date Added</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {dashboardData.recentMembers.map((member) => (
+                      <tr key={member.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 font-poppins">{member.name}</td>
+                        <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins">{member.age} / {member.sex}</td>
+                        <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins hidden sm:table-cell">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            member.youthGroup === "In-School Youth" 
+                              ? "bg-blue-100 text-blue-800" 
+                              : member.youthGroup === "Out-of-School Youth"
+                              ? "bg-amber-100 text-amber-800"
+                              : member.youthGroup === "Working Youth"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}>
+                            {member.youthGroup}
+                          </span>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins hidden md:table-cell">
+                          <div className="flex items-center">
+                            <MapPin className="h-3 w-3 text-gray-400 mr-1" />
+                            <span>{member.sitio}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 font-poppins">{member.dateAdded}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { Download, FileText, History, Upload, Plus, ArrowDown, Calendar, CheckCi
 import Link from "next/link";
 import { useMemberStore } from "@/lib/store/memberStore";
 import { Member } from "@/types/member";
+import FirebaseTest from "./FirebaseTest";
 
 export default function ReportsPage() {
   const { members, fetchMembers, isLoading } = useMemberStore();
@@ -24,16 +25,22 @@ export default function ReportsPage() {
     title: `Q1 ${new Date().getFullYear()} Youth Profile Report`
   });
   
-  // Sample report history data
-  const reportHistory = [
-    { id: 1, title: "Q1 2024 Youth Profile Report", date: "March 31, 2024", format: "PDF", preview: "/report-previews/report-preview-1.png" },
-    { id: 2, title: "Q4 2023 Youth Profile Report", date: "December 31, 2023", format: "XLSX", preview: "/report-previews/report-preview-2.png" },
-    { id: 3, title: "Q3 2023 Youth Profile Report", date: "September 30, 2023", format: "DOCX", preview: "/report-previews/report-preview-3.png" },
-  ];
+  // Empty report history
+  const reportHistory: any[] = [];
 
   // Load members from store on mount
   useEffect(() => {
-    fetchMembers();
+    const fetchMembersData = async () => {
+      try {
+        // In a real implementation, get barangayId from auth context
+        const barangayId = 'default';
+        await fetchMembers(barangayId);
+      } catch (error) {
+        console.error('Error fetching members:', error);
+      }
+    };
+    
+    fetchMembersData();
   }, [fetchMembers]);
 
   // Transform members to report format whenever the members change
@@ -110,11 +117,12 @@ export default function ReportsPage() {
 
   // Add default data for location fields only once on component mount
   useEffect(() => {
-    const defaultRegion = "REGION X";
-    const defaultProvince = "MISAMIS ORIENTAL";
-    const defaultCity = "CAGAYAN DE ORO CITY";
-    const defaultBarangay = "BARANGAY KAUSWAGAN";
+    const defaultRegion = "";
+    const defaultProvince = "";
+    const defaultCity = "";
+    const defaultBarangay = "";
     
+    // Only run this effect once on mount
     if (reportMembers.length === 1 && !reportMembers[0].name) {
       setReportMembers(members => members.map(member => ({
         ...member,
@@ -124,7 +132,7 @@ export default function ReportsPage() {
         barangay: member.barangay || defaultBarangay
       })));
     }
-  }, [reportMembers]);
+  }, []);  // Empty dependency array to ensure it only runs once on mount
 
   // Function to import members from the member store (updates the report with latest data)
   const importFromDatabase = () => {
@@ -224,13 +232,48 @@ export default function ReportsPage() {
     setShowPreviewModal(true);
   };
 
-  // Function to handle creating a new quarterly report
+  // Function to handle creating a new report
   const handleCreateNewReport = () => {
-    // Here you would generate a new report based on the selected quarter and year
-    alert(`Creating new report: ${newReportData.title}`);
-    // Close the modal
-    setShowNewReportModal(false);
-    // In a real app, you would then add this to the report history
+    // Validate the report data
+    if (!newReportData.quarter || !newReportData.year || !newReportData.title.trim()) {
+      alert("Please fill in all fields for the new report");
+      return;
+    }
+    
+    try {
+      // Instead of just closing the modal, we would save to Firebase here
+      // This would be implemented with a call to the Firebase service
+      import('@/services/firebase/reports').then(async ({ createReport }) => {
+        // In a real implementation, get barangayId and userId from auth context
+        const barangayId = 'default'; 
+        const userId = 'default';
+        
+        await createReport({
+          title: newReportData.title,
+          quarter: newReportData.quarter as 'Q1' | 'Q2' | 'Q3' | 'Q4',
+          year: newReportData.year,
+          barangayId: barangayId,
+          createdBy: userId,
+          status: 'draft',
+          memberCount: 0
+        });
+        
+        // Close the modal after successful creation
+        setShowNewReportModal(false);
+        
+        // Reset the form
+        setNewReportData({
+          quarter: "Q1",
+          year: new Date().getFullYear().toString(),
+          title: `Q1 ${new Date().getFullYear()} Youth Profile Report`
+        });
+        
+        // Optionally, you could refresh the reports list or navigate to the new report
+      });
+    } catch (error) {
+      console.error("Error creating report:", error);
+      alert("Failed to create report. Please try again.");
+    }
   };
 
   // Update handlers for the import functionality
@@ -1058,6 +1101,11 @@ export default function ReportsPage() {
           });
         `
       }} />
+
+      {/* Firebase Test Component */}
+      <div className="mb-8">
+        <FirebaseTest />
+      </div>
     </>
   );
 } 

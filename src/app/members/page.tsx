@@ -107,7 +107,20 @@ export default function MembersPage() {
   
   // Fetch members on component mount
   useEffect(() => {
-    fetchMembers();
+    const fetchMembersData = async () => {
+      try {
+        // Import dynamically to avoid circular dependencies
+        const { useAuth } = await import('@/contexts/AuthContext');
+        // In a real component, this would be used with the useAuth hook at the top level
+        // For now, we'll just use a default barangay ID
+        const barangayId = 'default';
+        await fetchMembers(barangayId);
+      } catch (error) {
+        console.error('Error fetching members:', error);
+      }
+    };
+    
+    fetchMembersData();
   }, [fetchMembers]);
   
   const itemsPerPage = 10;
@@ -432,7 +445,26 @@ export default function MembersPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {currentItems.length > 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={5} className="text-center py-10">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B51A6]"></div>
+                    <p className="text-gray-500 mt-2">Loading members...</p>
+                  </div>
+                </td>
+              </tr>
+            ) : currentItems.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center py-10">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Users className="h-10 w-10 text-gray-400" />
+                    <p className="text-gray-500 mt-2">No members found</p>
+                    <p className="text-gray-400 text-sm">Add members using the "+ New Member" button</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
               currentItems.map((member) => (
                 <tr 
                   key={member.id} 
@@ -471,12 +503,6 @@ export default function MembersPage() {
                   </td>
                 </tr>
               ))
-            ) : (
-              <tr>
-                <td colSpan={22} className="px-6 py-4 text-center text-sm text-gray-500">
-                  No members found
-                </td>
-              </tr>
             )}
           </tbody>
         </table>

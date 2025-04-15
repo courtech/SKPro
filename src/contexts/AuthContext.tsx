@@ -1,126 +1,85 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { 
-  User, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail 
-} from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { doc, setDoc } from "firebase/firestore";
-
-interface LocationInfo {
-  region: string;
-  province: string;
-  municipality: string;
-  barangay: string;
-}
+import { auth } from "@/lib/firebase";
+import { getBarangayById } from '@/services/firebase/barangays';
+import { Barangay } from '@/types/firestore';
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean;
-  signUp: (email: string, password: string, locationInfo?: LocationInfo) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
+  barangayId: string | null;
+  barangay: Barangay | null;
+  isLoading: boolean;
+  logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  barangayId: null,
+  barangay: null,
+  isLoading: true,
+  logout: async () => {},
+});
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [barangayId, setBarangayId] = useState<string | null>(null);
+  const [barangay, setBarangay] = useState<Barangay | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    // Set up the Firebase auth state observer
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
-      setLoading(false);
+      
+      // For now, use a default barangay ID
+      // In a real implementation, this would come from the user's claims or profile
+      if (user) {
+        // This is a placeholder - in a real app, you would get this from user metadata
+        const userBarangayId = 'default'; 
+        setBarangayId(userBarangayId);
+        
+        try {
+          const barangayData = await getBarangayById(userBarangayId);
+          setBarangay(barangayData);
+        } catch (error) {
+          console.error('Error fetching barangay:', error);
+        }
+      } else {
+        setBarangayId(null);
+        setBarangay(null);
+      }
+      
+      setIsLoading(false);
     });
 
+    // Clean up observer on unmount
     return () => unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, locationInfo?: LocationInfo) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // If location info is provided, store it in Firestore
-      if (locationInfo) {
-        const userDocRef = doc(db, "users", user.uid);
-        await setDoc(userDocRef, {
-          email: user.email,
-          createdAt: new Date(),
-          skInfo: {
-            region: locationInfo.region,
-            province: locationInfo.province,
-            municipality: locationInfo.municipality,
-            // Store the official barangay name
-            officialBarangayName: locationInfo.barangay,
-          },
-          role: "SK Official"
-        });
-      }
-      
-      router.push("/dashboard");
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const signIn = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard");
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const signOut = async () => {
+  const logout = async () => {
     try {
       await firebaseSignOut(auth);
       router.push("/auth/login");
     } catch (error) {
-      throw error;
-    }
-  };
-
-  const resetPassword = async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error) {
-      throw error;
+      console.error('Error signing out:', error);
     }
   };
 
   const value = {
     user,
-    loading,
-    signUp,
-    signIn,
-    signOut,
-    resetPassword
+    barangayId,
+    barangay,
+    isLoading,
+    logout,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  
-  return context;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 } 

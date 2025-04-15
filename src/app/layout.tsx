@@ -13,8 +13,12 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "SKPro - SK Profiling System",
+  title: "SKPro",
   description: "A centralized web application to simplify KK Profiling and youth data management for SK Officials",
+  icons: {
+    icon: '/SKPro-Logo.svg',
+    apple: '/SKPro-Logo.svg',
+  },
 };
 
 export default function RootLayout({
